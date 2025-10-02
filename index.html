@@ -75,7 +75,14 @@
         }
 
         .input-section {
-            margin-bottom: 30px;
+            margin-bottom: 20px;
+        }
+
+        .input-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
         }
 
         label {
@@ -88,29 +95,37 @@
             letter-spacing: 0.5px;
         }
 
-        textarea {
+        input, textarea {
             width: 100%;
-            min-height: 220px;
-            padding: 20px;
+            padding: 16px 20px;
             background: rgba(30, 41, 59, 0.8);
             border: 1px solid rgba(148, 163, 184, 0.3);
             border-radius: 12px;
             color: #f1f5f9;
             font-size: 14px;
-            font-family: 'JetBrains Mono', monospace;
-            resize: vertical;
+            font-family: 'Inter', sans-serif;
             transition: all 0.3s ease;
         }
 
-        textarea:focus {
+        input:focus, textarea:focus {
             outline: none;
             border-color: #00f5ff;
             box-shadow: 0 0 20px rgba(0, 245, 255, 0.2);
             background: rgba(30, 41, 59, 0.95);
         }
 
-        textarea::placeholder {
+        input::placeholder, textarea::placeholder {
             color: #64748b;
+        }
+
+        textarea {
+            min-height: 180px;
+            font-family: 'JetBrains Mono', monospace;
+            resize: vertical;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
         }
 
         .button-group {
@@ -253,7 +268,6 @@
             to { transform: rotate(360deg); }
         }
 
-        /* Success Modal Styles */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -380,6 +394,12 @@
             transform: translateY(-1px);
         }
 
+        @media (max-width: 768px) {
+            .input-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
         @media (max-width: 600px) {
             .container {
                 padding: 24px;
@@ -398,7 +418,6 @@
             }
         }
 
-        /* Scrollbar Styling */
         ::-webkit-scrollbar {
             width: 8px;
         }
@@ -417,9 +436,26 @@
     <div class="container">
         <h1>Checkatrade Data Formatter</h1>
         
-        <div class="input-section">
-            <label for="rawData">Input Raw Data</label>
-            <textarea id="rawData" placeholder="Paste your raw Checkatrade data here..."></textarea>
+        <div class="input-grid">
+            <div class="input-section">
+                <label for="nameInput">Name</label>
+                <input type="text" id="nameInput" placeholder="Enter customer name...">
+            </div>
+            
+            <div class="input-section">
+                <label for="emailInput">Email</label>
+                <input type="email" id="emailInput" placeholder="Enter customer email...">
+            </div>
+            
+            <div class="input-section">
+                <label for="phoneInput">Phone Number</label>
+                <input type="tel" id="phoneInput" placeholder="Enter phone number...">
+            </div>
+            
+            <div class="input-section full-width">
+                <label for="generalInfo">General Information</label>
+                <textarea id="generalInfo" placeholder="Paste additional information here..."></textarea>
+            </div>
         </div>
         
         <div class="button-group">
@@ -435,7 +471,6 @@
         <div id="statusMessage" class="status-message"></div>
     </div>
 
-    <!-- Success Modal -->
     <div id="modalOverlay" class="modal-overlay">
         <div class="modal">
             <div class="modal-header">
@@ -455,24 +490,70 @@
 
         document.getElementById('formatBtn').addEventListener('click', formatData);
         document.getElementById('sendBtn').addEventListener('click', sendToDatabase);
+        
+        // Auto-format phone number on input
+        document.getElementById('phoneInput').addEventListener('blur', function() {
+            this.value = convertPhoneNumber(this.value);
+        });
 
-        // Close modal when clicking overlay
         document.getElementById('modalOverlay').addEventListener('click', function(e) {
             if (e.target === this) {
                 closeModal();
             }
         });
 
-        function formatData() {
-            const rawData = document.getElementById('rawData').value.trim();
+        function convertPhoneNumber(phone) {
+            if (!phone) return phone;
             
-            if (!rawData) {
+            // Remove all spaces for processing
+            let cleaned = phone.replace(/\s+/g, '');
+            
+            // Check if it starts with +44
+            if (cleaned.startsWith('+44')) {
+                // Remove +44 and add 0
+                cleaned = '0' + cleaned.substring(3);
+            }
+            
+            // Add back spaces for readability (07xxx xxx xxx)
+            if (cleaned.length === 11 && cleaned.startsWith('0')) {
+                return cleaned.substring(0, 5) + ' ' + cleaned.substring(5, 8) + ' ' + cleaned.substring(8);
+            }
+            
+            return cleaned;
+        }
+
+        function formatData() {
+            const name = document.getElementById('nameInput').value.trim();
+            const email = document.getElementById('emailInput').value.trim();
+            const phone = convertPhoneNumber(document.getElementById('phoneInput').value.trim());
+            const generalInfo = document.getElementById('generalInfo').value.trim();
+            
+            if (!name && !email && !phone && !generalInfo) {
                 showStatus('Please enter some data to format.', 'error');
                 return;
             }
 
             try {
-                const formatted = parseCheckatradeData(rawData);
+                // Parse additional data from general information if provided
+                let parsedData = {
+                    timeOfRequest: '',
+                    projectTitle: '',
+                    jobDetails: ''
+                };
+                
+                if (generalInfo) {
+                    parsedData = parseCheckatradeData(generalInfo);
+                }
+                
+                const formatted = {
+                    name: name || parsedData.name || 'Not provided',
+                    email: email || parsedData.email || 'Not provided',
+                    phone: phone || parsedData.phone || 'Not provided',
+                    timeOfRequest: parsedData.timeOfRequest || 'Not provided',
+                    projectTitle: parsedData.projectTitle || 'Not provided',
+                    jobDetails: parsedData.jobDetails || generalInfo || 'Not provided'
+                };
+                
                 displayFormattedData(formatted);
                 document.getElementById('sendBtn').style.display = 'block';
                 formattedDataObj = formatted;
@@ -500,7 +581,6 @@
             for (let i = 0; i < lines.length; i++) {
                 const line = lines[i];
                 
-                // Detect sections
                 if (line === 'Message') {
                     currentSection = 'message';
                     collectingMessage = true;
@@ -512,8 +592,8 @@
                 } else if (line.match(/^\d{2} \w{3} \d{2} \d{2}:\d{2}$/)) {
                     timeOfRequest = line;
                     continue;
-                } else if (line.match(/^[\d\s]+$/)) {
-                    phone = line.replace(/\s+/g, ' ').trim();
+                } else if (line.match(/^[\d\s+]+$/)) {
+                    phone = convertPhoneNumber(line.replace(/\s+/g, ' ').trim());
                     continue;
                 } else if (line.includes('@')) {
                     email = line;
@@ -523,12 +603,11 @@
                     continue;
                 }
                 
-                // Handle message content
                 if (collectingMessage && currentSection === 'message') {
                     messageLines.push(line);
                 } else if (currentSection === 'startDate' && line !== "I'm planning and budgeting") {
-                    if (!phone && line.match(/^[\d\s]+$/)) {
-                        phone = line.replace(/\s+/g, ' ').trim();
+                    if (!phone && line.match(/^[\d\s+]+$/)) {
+                        phone = convertPhoneNumber(line.replace(/\s+/g, ' ').trim());
                     } else if (!email && line.includes('@')) {
                         email = line;
                     } else if (!name && line.match(/^[A-Za-z\s]+$/)) {
@@ -539,22 +618,20 @@
             
             message = messageLines.join(' ').trim();
             
-            // Extract additional phone numbers from message
-            const phoneMatches = message.match(/\d{4}\s?\d{3}\s?\d{4}/g);
+            const phoneMatches = message.match(/\+?44\s?\d{4}\s?\d{3}\s?\d{4}|\d{4}\s?\d{3}\s?\d{4}/g);
             if (phoneMatches && phoneMatches.length > 0) {
-                // Use the first phone found if we don't have one already
                 if (!phone) {
-                    phone = phoneMatches[0].replace(/\s+/g, ' ').trim();
+                    phone = convertPhoneNumber(phoneMatches[0].replace(/\s+/g, ' ').trim());
                 }
             }
             
             return {
-                name: name || 'Not provided',
-                email: email || 'Not provided',
-                phone: phone || 'Not provided',
-                timeOfRequest: timeOfRequest || 'Not provided',
-                projectTitle: projectTitle || 'Not provided',
-                jobDetails: message || 'Not provided'
+                name: name || '',
+                email: email || '',
+                phone: phone || '',
+                timeOfRequest: timeOfRequest || '',
+                projectTitle: projectTitle || '',
+                jobDetails: message || ''
             };
         }
 
@@ -579,11 +656,9 @@ Job Details: ${data.jobDetails}`;
             const sendBtn = document.getElementById('sendBtn');
             const originalText = sendBtn.innerHTML;
             
-            // Show loading state
             sendBtn.disabled = true;
             sendBtn.innerHTML = '<span class="loading"></span>Transmitting...';
             
-            // Structure data for webhook with individual fields
             const webhookData = {
                 name: formattedDataObj.name,
                 email: formattedDataObj.email,
@@ -610,7 +685,6 @@ Job Details: ${data.jobDetails}`;
             } catch (error) {
                 showStatus('Error sending data: ' + error.message, 'error');
             } finally {
-                // Reset button state
                 sendBtn.disabled = false;
                 sendBtn.innerHTML = originalText;
             }
@@ -638,13 +712,11 @@ Job Details: ${formattedDataObj.jobDetails}`;
             statusEl.className = `status-message status-${type}`;
             statusEl.style.display = 'block';
             
-            // Hide after 5 seconds
             setTimeout(() => {
                 statusEl.style.display = 'none';
             }, 5000);
         }
 
-        // Close modal with Escape key
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 closeModal();
